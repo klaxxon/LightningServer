@@ -10,10 +10,7 @@ import (
 	"image/png"
 	"log"
 	"math"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -364,33 +361,6 @@ func main() {
 
 	http.HandleFunc("/api/", api)
 	http.Handle("/", http.FileServer(http.Dir("www")))
-
-	origin, _ := url.Parse("http://192.168.1.4:8123/")
-	director := func(req *http.Request) {
-		req.Header.Add("X-Forwarded-Host", req.Host)
-		req.Header.Add("X-Origin-Host", origin.Host)
-		req.URL.Scheme = "http"
-		req.URL.Host = origin.Host
-	}
-	proxy := &httputil.ReverseProxy{Director: director}
-	proxy.Transport = &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   120 * time.Second,
-			KeepAlive: 60 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   20 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	http.HandleFunc("/tile/", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("serverProxy %s", r.RequestURI)
-		start := time.Now()
-		proxy.ServeHTTP(w, r)
-		log.Printf("%f done serverProxy %s", time.Since(start).Seconds(), r.RequestURI)
-	})
 
 	err = http.ListenAndServeTLS("0.0.0.0:8888", "server.crt", "server.key", nil)
 	if err != nil {
