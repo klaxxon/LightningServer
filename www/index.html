@@ -1,0 +1,369 @@
+<html>
+	<head>
+    <script type="text/javascript" src="js/jquery-3.4.1.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.4.0/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/> 
+    <script src="https://unpkg.com/leaflet@1.4.0/dist/leaflet.js"
+    integrity="sha512-QVftwZFqvtRNi0ZyCtsznlKSWOStnDORoefr1enyq5mVL4tmKB3S/EnC3rRJcxCPavG10IcrVGSmPh6Qw5lwrg==" crossorigin=""></script>
+    <script src='js/Chart.bundle.min.js'></script>
+    </head>
+	<body>
+    <div style="width:20%; position:absolute; top:0; left:0; height:100%;">
+      <h1>Lightning Metrics</h1><br/>
+      <canvas id="minChart"></canvas><br/>
+      <canvas id="hourChart"></canvas><br/>
+      <canvas id="dailyChart"></canvas><br/>
+      <table border='1' style="text-align:center; width:100%;">
+        <tr><th>Date</th><th style="background-color:#F88;">0-99</th><th style="background-color:#88F;">100-199</th><th style="background-color:#8F8;">200-</th></tr>
+        <tbody id="daily_report"></tbody>
+      </table>
+    </div>
+    <div id="map" class="map" style="width:80%; position:absolute; top:0; left:20%; height:100%;"></div>
+
+<script type="text/javascript">
+  var map;
+  var clat = 38.518011, clng = -89.936773, zoom = 7;
+  var radar, tileLayer;
+  var minctx = document.getElementById("minChart").getContext('2d');
+  var hourctx = document.getElementById("hourChart").getContext('2d');
+  var dailyctx = document.getElementById("dailyChart").getContext('2d');
+  var lightning = [];
+  lightning.push(L.icon({ iconUrl: 'img/red_lightning.png', iconSize: [32, 32], iconAnchor: [16, 16] }));
+  lightning.push(L.icon({ iconUrl: 'img/orange_lightning.png', iconSize: [32, 32], iconAnchor: [16, 16] }));
+  lightning.push(L.icon({ iconUrl: 'img/yellow_lightning.png', iconSize: [32, 32], iconAnchor: [16, 16] }));
+  lightning.push(L.icon({ iconUrl: 'img/green_lightning.png', iconSize: [32, 32], iconAnchor: [16, 16] }));
+  lightning.push(L.icon({ iconUrl: 'img/blue_lightning.png', iconSize: [32, 32], iconAnchor: [16, 16] }));
+  
+  $(document).ready(function() {
+    console.log(lightning);
+    map = L.map('map').setView([clat, clng], zoom)
+    console.log("host",  document.location.host );
+    tileLayer = L.tileLayer('https://' + document.location.host + '/tile/{z}/{x}/{y}.png', {
+      attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+      maxZoom: 20,
+    }).addTo(map);
+    addCircle(100, 'red');
+    addCircle(200, 'blue');
+    addCircle(300, 'green');
+    loadStrikes();
+    getRadar();
+    showRadar();
+    minchart = new Chart(minctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{label:"0-99 Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
+                   {label:"100-199 Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
+                   {label:"200- Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
+        ]
+      },
+      options: {
+        scales: {
+          yAxes: [{
+            stacked: true,
+            scaleLabel: {
+              labelString: "Stike Count",
+              display: true,
+            },
+            ticks: {
+              beginAtZero:true
+            }
+          }],
+          xAxes: [{
+            scaleLabel: {
+             labelString: "Minutes Ago",
+             display: true,
+            }
+          }]
+        },
+        // This chart will not respond to mousemove, etc
+        events: ['click']
+      }
+    });
+    hourchart = new Chart(hourctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{label:"0-99 Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
+                   {label:"100-199 Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
+                   {label:"200- Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
+        ]
+      },
+      options: {
+        scales: {
+          yAxes: [{
+            stacked: true,
+            scaleLabel: {
+              labelString: "Stike Count",
+              display: true,
+            },
+            ticks: {
+              beginAtZero:true
+            }
+          }],
+          xAxes: [{
+            scaleLabel: {
+             labelString: "Hours Ago",
+             display: true,
+            }
+          }]
+        },
+        // This chart will not respond to mousemove, etc
+        events: ['click']
+      }
+    });
+    dailychart = new Chart(dailyctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{label:"0-99 Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
+                   {label:"100-199 Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
+                   {label:"200- Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
+        ]
+      },
+      options: {
+        scales: {
+          yAxes: [{
+            stacked: true,
+            scaleLabel: {
+              labelString: "Stike Count",
+              display: true,
+            },
+            ticks: {
+              beginAtZero:true
+            }
+          }],
+          xAxes: [{
+            scaleLabel: {
+             labelString: "Days Ago",
+             display: true,
+            }
+          }]
+        },
+        // This chart will not respond to mousemove, etc
+        events: ['click']
+      }
+    });
+  });
+
+  function addCircle(radius, color) {
+    radius *= 1609; // Meters
+    var circle = L.circle([clat, clng], {
+          color: color,
+         // fillColor: color,
+         // fillOpacity: 0.1,
+          fill: false,
+          opacity: 0.5,
+          radius: radius
+      }).addTo(map);      
+  }
+
+  var radarpos = 0;
+  var radar = [];
+
+  function getRadar() {
+    for(a=0;a<36;a++) {
+      var imageUrl = 'https://' + document.location.host + '/api/getRadar' + a + "&tm" + new Date().getTime();
+      imageBounds = [[50.41, -127.62], [21.74, -66.5]];
+
+      if (radar[a] !== undefined) map.removeLayer(radar[a]);
+      var r = L.imageOverlay(imageUrl, imageBounds, {opacity:0.5});   
+
+      function clearRadar(event, a) {
+        //console.log("clear ", event, a);
+        radar[a] = undefined;
+      }
+
+      r.on("error", clearRadar);
+      radar[a] = r;
+    }
+    setTimeout(getRadar, 600000);
+  }
+
+  
+
+  function showRadar() {
+    if (radar[radarpos] !== undefined) {
+      map.removeLayer(radar[radarpos]);
+    }
+    var cnt = 0;
+    while (true) {
+      radarpos--;
+      if (radarpos < 0) {
+        radarpos = 35;
+        cnt++;
+        //console.log("cnt", cnt);
+        if (cnt > 1) break;
+      }
+      //console.log("radar", radarpos, radar[radarpos]);
+      if (radar[radarpos] !== undefined) {
+        radar[radarpos].addTo(map);
+        break;
+      }
+    }
+    //console.log("delaying");
+    var delay = 250;
+    if (!radarpos) delay *= 20;
+    setTimeout(showRadar, delay);
+  }
+
+var strikes = [];
+
+
+function calcLatLng(d, brng) {
+  var lat = 38.518011 * Math.PI / 180;
+	var lng = -89.936773 * Math.PI / 180;
+  var R = 6371000; // metres
+  var elat = Math.asin( Math.sin(lat)*Math.cos(d/R) + Math.cos(lat)*Math.sin(d/R)*Math.cos(brng) );
+  var elng = lng + Math.atan2(Math.sin(brng)*Math.sin(d/R)*Math.cos(lat), Math.cos(d/R)-Math.sin(lat)*Math.sin(elat));
+  elng = 180 * elng / Math.PI;
+  elat = 180 * elat / Math.PI;
+  elng = (elng+540)%360 - 180;
+  return {lat:elat, lng:elng};
+  // where	φ is latitude, λ is longitude, θ is the bearing (clockwise from north), δ is the angular distance d/R; d being the distance travelled, R the earth’s radius
+  //The longitude can be normalised to −180…+180 using (lon+540)%360-180
+  //For final bearing, simply take the initial bearing from the end point to the start point and reverse it with (brng+180)%360.
+}
+
+
+function clearCharts() {
+  minchart.data.labels = [];
+  minchart.data.datasets.forEach((dataset) => {
+    dataset.data = [];
+  });
+  minchart.update();
+
+  hourchart.data.labels = [];
+  hourchart.data.datasets.forEach((dataset) => {
+    dataset.data = [];
+  });
+  hourchart.update();
+
+  dailychart.data.labels = [];
+  dailychart.data.datasets.forEach((dataset) => {
+    dataset.data = [];
+  });
+  dailychart.update();
+}
+
+function loadStrikes() {
+  var promise = post("/api/getStrikes");
+  promise.then(function(val) {
+    clearCharts();
+    for(a in strikes) {
+      map.removeLayer(strikes[a]);
+    }
+    mincount = [];
+    mincount[0] = [];
+    mincount[1] = [];
+    mincount[2] = [];
+    for(var a=0;a<60;a++) {
+      mincount[0][a] = 0;
+      mincount[1][a] = 0;
+      mincount[2][a] = 0;
+    }
+    strikes = [];
+    console.log("getStrikes", val);
+    for(var a in val.Strike) {
+      var s = val.Strike[a];
+      var d = Math.floor(s.dmeters/160934);
+      if (d > 2) d = 2;
+      mincount[d][Math.floor(s.age / 60)]++;
+      var pos = Math.floor(s.age / 120);
+      if (pos > 4) continue;
+      var z = calcLatLng(s.dmeters, s.hdg);
+      strikes.push(L.marker([z.lat, z.lng],{icon: lightning[pos]}).addTo(map));
+    }
+    console.log("mincount", mincount);
+    for(var a=0;a<60;a++) {
+      minchart.data.labels.unshift(a);
+      minchart.data.datasets[0].data.unshift(mincount[0][a]);
+      minchart.data.datasets[1].data.unshift(mincount[1][a]);
+      minchart.data.datasets[2].data.unshift(mincount[2][a]);
+    }
+    minchart.update();
+    for(var a=0;a<72;a++) {
+      var s = val.Hourly[a];
+      hourchart.data.labels.unshift(a)
+      if (s == undefined) {
+        for(var b=0;b<3;b++) {
+          hourchart.data.datasets[b].data.unshift(0);
+        }
+        continue;
+      }
+      for(var b=0;b<3;b++) {
+        var cnt = s[b];
+        if (cnt == undefined) {
+          cnt = 0;
+        }
+        hourchart.data.datasets[b].data.unshift(cnt);
+      }
+    }
+    hourchart.update();
+
+    var html = "";
+    for(var a=0;a<32;a++) {
+      var s = val.Daily[a];
+      dailychart.data.labels.unshift(a)
+      if (s == undefined) {
+        for(var b=0;b<3;b++) {
+          dailychart.data.datasets[b].data.unshift(0);
+        }
+        continue;
+      }
+      for(var b=0;b<3;b++) {
+        var cnt = s.cnt[b];
+        if (cnt == undefined) {
+          cnt = 0;
+        }
+        dailychart.data.datasets[b].data.unshift(cnt);
+      }
+      if (s.day != "") {
+        var day = s.day.substring(0, 4) + "-" + s.day.substring(4, 6) + "-" + s.day.substring(6, 8)
+        html += "<tr><td>" + day + "</td><td>" + s.cnt[0] + "</td><td>" + s.cnt[1] + "</td><td>" + s.cnt[2] + "</td></tr>";
+      }
+    }
+    $("#daily_report").html(html);
+    dailychart.update();
+    setTimeout(loadStrikes, 60000);
+  }, function(val) {
+    console.log("2", val); // 2
+  })
+}
+
+
+function post(url, data) {
+  // Return a new promise.
+  return new Promise(function(resolve, reject) {
+    // Do the usual XHR stuff
+    var req = new XMLHttpRequest();
+    req.open('POST', url)
+    req.setRequestHeader('Content-type','application/json; charset=utf-8');
+
+    req.onload = function() {
+      // This is called even on 404 etc
+      // so check the status
+      if (req.status == 200) {
+        // Resolve the promise with the response text
+        if (req.response.length > 0) resolve(JSON.parse(req.response));
+        else resolve();
+      }
+      else {
+        // Otherwise reject with the status text
+        // which will hopefully be a meaningful error
+        reject(Error(req.statusText));
+      }
+    };
+
+    // Handle network errors
+    req.onerror = function() {
+      reject(Error("Network Error"));
+    };
+    // Make the request
+    req.send(JSON.stringify(data));
+  });
+}
+
+
+</script>
+</body>
+</html>
