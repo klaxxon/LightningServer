@@ -161,19 +161,20 @@
   var radar = [];
 
   function getRadar() {
-    for(a=0;a<36;a++) {
+    for(let a=0;a<36;a++) {
       var imageUrl = 'https://' + document.location.host + '/api/getRadar' + a + "&tm" + new Date().getTime();
       imageBounds = [[50.41, -127.62], [21.74, -66.5]];
 
       if (radar[a] !== undefined) map.removeLayer(radar[a]);
       var r = L.imageOverlay(imageUrl, imageBounds, {opacity:0.5});   
 
-      function clearRadar(event, a) {
-        //console.log("clear ", event, a);
-        radar[a] = undefined;
+      var clearRadar = function(event) {
       }
 
-      r.on("error", clearRadar);
+      r.on("error", function(event) {
+        //console.log("clear ", event, a);
+        radar[a] = undefined;
+      });
       radar[a] = r;
     }
     setTimeout(getRadar, 600000);
@@ -200,9 +201,9 @@
         break;
       }
     }
-    //console.log("delaying");
     var delay = 250;
     if (!radarpos) delay *= 20;
+    //console.log("delaying",delay);
     setTimeout(showRadar, delay);
   }
 
@@ -244,6 +245,12 @@ function clearCharts() {
   });
   dailychart.update();
 }
+
+
+function prettyDate(i) {
+  return i.substring(0, 4) + "-" + i.substring(4, 6) + "-" + i.substring(6, 8)
+}
+
 
 function loadStrikes() {
   var promise = post("/api/getStrikes");
@@ -301,15 +308,16 @@ function loadStrikes() {
     hourchart.update();
 
     var html = "";
-    for(var a=0;a<32;a++) {
+    for(var a=0;a<14;a++) {
       var s = val.Daily[a];
-      dailychart.data.labels.unshift(a)
       if (s == undefined) {
+        dailychart.data.labels.unshift(a)
         for(var b=0;b<3;b++) {
           dailychart.data.datasets[b].data.unshift(0);
         }
         continue;
       }
+      dailychart.data.labels.unshift(prettyDate(s.day));
       for(var b=0;b<3;b++) {
         var cnt = s.cnt[b];
         if (cnt == undefined) {
@@ -318,8 +326,7 @@ function loadStrikes() {
         dailychart.data.datasets[b].data.unshift(cnt);
       }
       if (s.day != "") {
-        var day = s.day.substring(0, 4) + "-" + s.day.substring(4, 6) + "-" + s.day.substring(6, 8)
-        html += "<tr><td>" + day + "</td><td>" + s.cnt[0] + "</td><td>" + s.cnt[1] + "</td><td>" + s.cnt[2] + "</td></tr>";
+        html += "<tr><td>" + prettyDate(s.day) + "</td><td>" + s.cnt[0] + "</td><td>" + s.cnt[1] + "</td><td>" + s.cnt[2] + "</td></tr>";
       }
     }
     $("#daily_report").html(html);
