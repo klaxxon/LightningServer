@@ -107,8 +107,8 @@ func getRadarImage() {
 			fmt.Println(err)
 		} else {
 			buffer.WriteTo(out)
-			out.Close()
 		}
+		out.Close()
 
 		// Remove older radar image
 		now = now.Add(RADAR_HISTORY_LENGTH * -10 * time.Minute)
@@ -245,6 +245,7 @@ func apiGetStrikes(w http.ResponseWriter) {
 		}
 		data.Daily[age].Cnt[dist] = cnt
 	}
+	db.Close()
 
 	json.NewEncoder(w).Encode(data)
 }
