@@ -16,8 +16,19 @@
         <tr><th>Date</th><th style="background-color:#F88;">0-99</th><th style="background-color:#88F;">100-199</th><th style="background-color:#8F8;">200-</th></tr>
         <tbody id="daily_report"></tbody>
       </table>
+      </div>
+    <div style="width:80%; position:absolute; top:0; left:20%; height:100%;">
+      <div id="map" class="map" style="position:relative; width:100%; height:95%;"></div>
+      <table>
+        <tr>
+          <td><img src='img/red_lightning.png' /></td><td>< 2 Minutes</td>
+          <td><img src='img/orange_lightning.png' /></td><td>< 4 Minutes</td>
+          <td><img src='img/yellow_lightning.png' /></td><td>< 6 Minutes</td>
+          <td><img src='img/green_lightning.png' /></td><td>< 8 Minutes</td>
+          <td><img src='img/blue_lightning.png' /></td><td>< 10 Minutes</td>
+        </tr>
+      </table>
     </div>
-    <div id="map" class="map" style="width:80%; position:absolute; top:0; left:20%; height:100%;"></div>
 
 <script type="text/javascript">
   var map;
@@ -269,7 +280,7 @@ function loadStrikes() {
       mincount[2][a] = 0;
     }
     strikes = [];
-    console.log("getStrikes", val);
+    //console.log("getStrikes", val);
     for(var a in val.Strike) {
       var s = val.Strike[a];
       var d = Math.floor(s.dmeters/160934);
@@ -280,7 +291,7 @@ function loadStrikes() {
       var z = calcLatLng(s.dmeters, s.hdg);
       strikes.push(L.marker([z.lat, z.lng],{icon: lightning[pos]}).addTo(map));
     }
-    console.log("mincount", mincount);
+    //console.log("mincount", mincount);
     for(var a=0;a<60;a++) {
       minchart.data.labels.unshift(a);
       minchart.data.datasets[0].data.unshift(mincount[0][a]);
