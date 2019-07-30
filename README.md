@@ -18,7 +18,7 @@ The client serves up the single index.html with javascript providing some graphs
 
 # Centering map
 
-Simply change the clat and clng arounf line 40 in index.html to your devices location.
+Simply change the clat and clng around line 40 in index.html to your devices location.
 
 
 # Setting custom ranges
