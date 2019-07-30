@@ -65,63 +65,67 @@ func getRadarImage() {
 		log.Println("Loading radar image...")
 		resp, err := http.Get("https://radar.weather.gov/ridge/Conus/RadarImg/latest_radaronly.gif")
 		if err != nil {
-			log.Fatalln(err)
-		}
-		i, _ := imaging.Decode(resp.Body)
-
-		// Reproject from the NOAA EPSG:4326 to the OSM EPSG:3857
-		var yy, yd float64
-		ni := imaging.New(i.Bounds().Dx(), i.Bounds().Dy(), color.NRGBA{0, 0, 0, 0})
-		for x := 0; x < ni.Bounds().Dx(); x++ {
-			yy = 0
-			lasty := 0
-			yd = 1.2
-			for y := 0; y < ni.Bounds().Dy(); y++ {
-				ny := int(math.Floor(yy))
-				c := i.At(x, y)
-				d := colorDiff(c, color.RGBA{0, 255, 255, 255})
-				if d > 60000.0 {
-					ni.Set(x, ny, c)
-					if (ny - lasty) > 1 {
-						ni.Set(x, ny-1, c)
-					}
-				}
-				yy += yd
-				yd -= 0.00025
-				lasty = ny
-			}
-		}
-		addLabel(ni, 10, 10, time.Now().String())
-		buffer := new(bytes.Buffer)
-		if err := png.Encode(buffer, ni); err != nil {
-			log.Println("unable to encode image.")
-		}
-
-		radarHistory[radarPos] = buffer.Bytes()
-		now := time.Now()
-		min := (int(math.Floor(float64(now.Unix())/600)) % 6) * 10
-		fn := fmt.Sprintf("./radar_%s%02d.png", now.Format("2006010215"), min)
-		log.Printf("Saving radar image %s\n", fn)
-		out, err := os.Create(fn)
-		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
+			time.Sleep(time.Minute)
+			continue
 		} else {
-			buffer.WriteTo(out)
-		}
-		out.Close()
+			i, _ := imaging.Decode(resp.Body)
 
-		// Remove older radar image
-		now = now.Add(RADAR_HISTORY_LENGTH * -10 * time.Minute)
-		min = (int(math.Floor(float64(now.Unix())/600)) % 6) * 10
-		fn = fmt.Sprintf("./radar_%s%02d.png", now.Format("2006010215"), min)
-		log.Printf("Removing file %s\n", fn)
-		os.Remove(fn)
+			// Reproject from the NOAA EPSG:4326 to the OSM EPSG:3857
+			var yy, yd float64
+			ni := imaging.New(i.Bounds().Dx(), i.Bounds().Dy(), color.NRGBA{0, 0, 0, 0})
+			for x := 0; x < ni.Bounds().Dx(); x++ {
+				yy = 0
+				lasty := 0
+				yd = 1.2
+				for y := 0; y < ni.Bounds().Dy(); y++ {
+					ny := int(math.Floor(yy))
+					c := i.At(x, y)
+					d := colorDiff(c, color.RGBA{0, 255, 255, 255})
+					if d > 60000.0 {
+						ni.Set(x, ny, c)
+						if (ny - lasty) > 1 {
+							ni.Set(x, ny-1, c)
+						}
+					}
+					yy += yd
+					yd -= 0.00025
+					lasty = ny
+				}
+			}
+			addLabel(ni, 10, 10, time.Now().String())
+			buffer := new(bytes.Buffer)
+			if err := png.Encode(buffer, ni); err != nil {
+				log.Println("unable to encode image.")
+			}
 
-		radarPos++
-		if radarPos >= RADAR_HISTORY_LENGTH {
-			radarPos = 0
+			radarHistory[radarPos] = buffer.Bytes()
+			now := time.Now()
+			min := (int(math.Floor(float64(now.Unix())/600)) % 6) * 10
+			fn := fmt.Sprintf("./radar_%s%02d.png", now.Format("2006010215"), min)
+			log.Printf("Saving radar image %s\n", fn)
+			out, err := os.Create(fn)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				buffer.WriteTo(out)
+			}
+			out.Close()
+
+			// Remove older radar image
+			now = now.Add(RADAR_HISTORY_LENGTH * -10 * time.Minute)
+			min = (int(math.Floor(float64(now.Unix())/600)) % 6) * 10
+			fn = fmt.Sprintf("./radar_%s%02d.png", now.Format("2006010215"), min)
+			log.Printf("Removing file %s\n", fn)
+			os.Remove(fn)
+
+			radarPos++
+			if radarPos >= RADAR_HISTORY_LENGTH {
+				radarPos = 0
+			}
+			time.Sleep(601 * time.Second)
 		}
-		time.Sleep(601 * time.Second)
+
 	}
 }
 
@@ -154,6 +158,7 @@ func checksum(in string) string {
 }
 
 func apiGetStrikes(w http.ResponseWriter) {
+	RANGES := [3]int{144, 204, 250}
 	type STRIKE struct {
 		Timestamp string  `json:"ts"`
 		Age       int64   `json:"age"`
@@ -175,11 +180,12 @@ func apiGetStrikes(w http.ResponseWriter) {
 	data.Daily = make([]DAILY, 31)
 
 	now := time.Now()
-	earliest := now.Add(-1 * time.Hour).Format("20060102150405")
 
 	dbMutex.Lock()
 	defer dbMutex.Unlock()
 	db, _ := getDB()
+	// Recent, raw strikes
+	earliest := now.Add(-1 * time.Hour).Format("20060102150405")
 	rows, _ := db.Query(`SELECT *
 														FROM strikes
 														WHERE ts >= '` + earliest + `'
@@ -199,21 +205,29 @@ func apiGetStrikes(w http.ResponseWriter) {
 	}
 	rows.Close()
 
+	// Aggregate counts by RANGES
 	earliest = now.Add(-72 * time.Hour).Format("20060102150405")
-	rows, _ = db.Query(`SELECT SUBSTR(ts,1,10) AS hour, (distance/100) AS dist, COUNT(1) AS cnt
+	rows, _ = db.Query(fmt.Sprintf(`SELECT SUBSTR(ts,1,10) AS hour, 
+																		CASE 
+																		  WHEN distance<%d THEN 0 
+																		  WHEN distance<%d THEN 1 
+																		  WHEN distance<%d THEN 2 
+																		  ELSE 3 
+																		END dist, COUNT(1) AS cnt
 														FROM strikes
-														WHERE ts >= '` + earliest + `'
+														WHERE ts >= '`+earliest+`'
+														AND dist < 3
 														GROUP BY hour, dist
-														ORDER BY dist, hour DESC`)
+														ORDER BY dist, hour DESC`, RANGES[0], RANGES[1], RANGES[2]))
 	for rows.Next() {
 		var ts string
 		var cnt, dist int64
 
 		rows.Scan(&ts, &dist, &cnt)
-		tts, _ := time.Parse("20060102150405 MST", ts+"0000 "+tzone)
 		if dist > 2 {
-			dist = 2
+			continue
 		}
+		tts, _ := time.Parse("20060102150405 MST", ts+"0000 "+tzone)
 		age := int64(time.Since(tts).Seconds() / 3600)
 		if age >= 72 {
 			continue
@@ -225,20 +239,27 @@ func apiGetStrikes(w http.ResponseWriter) {
 	}
 
 	earliest = now.AddDate(0, 0, -31).Format("20060102150405")
-	rows, _ = db.Query(`SELECT SUBSTR(ts,1,8) AS day, (distance/100) AS dist, COUNT(1) AS cnt
+	rows, _ = db.Query(fmt.Sprintf(`SELECT SUBSTR(ts,1,8) AS day, 
+	                                  CASE 
+																		  WHEN distance<%d THEN 0 
+																		  WHEN distance<%d THEN 1 
+																		  WHEN distance<%d THEN 2 
+																		  ELSE 3 
+																		END dist, COUNT(1) AS cnt
 														FROM strikes
-														WHERE ts >= '` + earliest + `'
+														WHERE ts >= '`+earliest+`'
+														AND dist < 3
 														GROUP BY day, dist
-														ORDER BY dist, day DESC`)
+														ORDER BY dist, day DESC`, RANGES[0], RANGES[1], RANGES[2]))
 	for rows.Next() {
 		var ts string
 		var cnt, dist int64
 
 		rows.Scan(&ts, &dist, &cnt)
-		tts, _ := time.Parse("20060102150405 MST", ts+"000000 "+tzone)
 		if dist > 2 {
-			dist = 2
+			continue
 		}
+		tts, _ := time.Parse("20060102150405 MST", ts+"000000 "+tzone)
 		age := int64(time.Since(tts).Seconds() / 86400)
 		if data.Daily[age].Day == "" {
 			data.Daily[age] = DAILY{Day: ts}

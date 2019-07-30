@@ -13,7 +13,12 @@
       <canvas id="hourChart"></canvas><br/>
       <canvas id="dailyChart"></canvas><br/>
       <table border='1' style="text-align:center; width:100%;">
-        <tr><th>Date</th><th style="background-color:#F88;">0-99</th><th style="background-color:#88F;">100-199</th><th style="background-color:#8F8;">200-</th></tr>
+        <tr>
+          <th>Date</th>
+          <th id="head1" style="background-color:#F88;">0-99</th>
+          <th id="head2" style="background-color:#88F;">100-199</th>
+          <th id="head3" style="background-color:#8F8;">200-</th>
+        </tr>
         <tbody id="daily_report"></tbody>
       </table>
       </div>
@@ -33,6 +38,7 @@
 <script type="text/javascript">
   var map;
   var clat = 38.518011, clng = -89.936773, zoom = 7;
+  var RANGES = [144, 204, 250];
   var radar, tileLayer;
   var minctx = document.getElementById("minChart").getContext('2d');
   var hourctx = document.getElementById("hourChart").getContext('2d');
@@ -52,9 +58,12 @@
       attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
       maxZoom: 20,
     }).addTo(map);
-    addCircle(100, 'red');
-    addCircle(200, 'blue');
-    addCircle(300, 'green');
+    $("#head1").html("0-" + RANGES[0]);
+    $("#head2").html(RANGES[0] + "-" + RANGES[1]);
+    $("#head3").html(RANGES[1] + "-" + RANGES[2]);
+    addCircle(RANGES[0], 'red');
+    addCircle(RANGES[1], 'blue');
+    addCircle(RANGES[2], 'green');
     loadStrikes();
     getRadar();
     showRadar();
@@ -62,9 +71,9 @@
       type: 'line',
       data: {
         labels: [],
-        datasets: [{label:"0-99 Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
-                   {label:"100-199 Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
-                   {label:"200- Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
+        datasets: [{label:"0-"+RANGES[0]+" Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
+                   {label:RANGES[0]+" - "+RANGES[1]+" Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
+                   {label:RANGES[1]+" - " + RANGES[2] + " Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
         ]
       },
       options: {
@@ -94,9 +103,9 @@
       type: 'line',
       data: {
         labels: [],
-        datasets: [{label:"0-99 Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
-                   {label:"100-199 Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
-                   {label:"200- Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
+        datasets: [{label:"0-"+RANGES[0]+" Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
+                   {label:RANGES[0]+" - "+RANGES[1]+" Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
+                   {label:RANGES[1]+" - " + RANGES[2] + " Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
         ]
       },
       options: {
@@ -126,9 +135,9 @@
       type: 'line',
       data: {
         labels: [],
-        datasets: [{label:"0-99 Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
-                   {label:"100-199 Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
-                   {label:"200- Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
+        datasets: [{label:"0-"+RANGES[0]+" Miles", data:[], backgroundColor:['rgba(200, 64, 64, 0.8)']},
+                   {label:RANGES[0]+" - "+RANGES[1]+" Miles", data:[], backgroundColor:['rgba(64, 64, 200, 0.8)']},
+                   {label:RANGES[1]+" - " + RANGES[2] + " Miles", data:[], backgroundColor:['rgba(64, 200, 64, 0.8)']},
         ]
       },
       options: {
@@ -283,8 +292,11 @@ function loadStrikes() {
     //console.log("getStrikes", val);
     for(var a in val.Strike) {
       var s = val.Strike[a];
-      var d = Math.floor(s.dmeters/160934);
-      if (d > 2) d = 2;
+      var miles = Math.floor(s.dmeters/1609.34); // Miles
+      if (miles < RANGES[0]) d = 0;
+      else if (miles < RANGES[1]) d = 1;
+      else if (miles < RANGES[2]) d = 2;
+      else continue;
       mincount[d][Math.floor(s.age / 60)]++;
       var pos = Math.floor(s.age / 120);
       if (pos > 4) continue;
